@@ -1,6 +1,6 @@
 import logo from './logo.svg';
 import './App.css';
-import IntervalDemo from './UseScorllDemo';
+import IntervalDemo from './mvcDemo/index';
 //import RefDemo from './RefDemo';
 
 function App() {
