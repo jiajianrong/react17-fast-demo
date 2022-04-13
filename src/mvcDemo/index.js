@@ -2,6 +2,15 @@ import React, { useState } from 'react';
 import { useEffect, useCallback, useRef } from 'react';
 
 // https://blog.testdouble.com/posts/2019-11-04-react-mvc/
+export default function EditCustomer({ id=1 }) {
+  return (
+    <EditCustomerController id={id}>
+      <CustomerForm/>
+    </EditCustomerController>
+  );
+}
+
+
 
 function sleep(ms) {
   return new Promise(res => {
@@ -10,107 +19,106 @@ function sleep(ms) {
     }, ms);
   })
 }
-
-export default function index() {
-  return (
-    <>
-      <EditCustomer id={1} />
-    </>
-  );
+function NotFound() {
+  return (<div>Not Found</div>)
 }
-
 function ErrorDisplay({errors}) {
-  return <div>errors happened: {errors}</div>
+  return (<div>errors happened: {errors}</div>)
 }
-function formatChangeForFrontend(model) {
-  return model;
-}
-async function _fetchUpdate() {
+async function _fetchUpdate({body}) {
   await sleep(1000);
-  return {
-    json: function() {
-      return {
-        id: 1,
-        name: 'newName',
-        email: 'newEmail',
-      }
-    }
-  }
+  return body;
+  //return { id: 1, name: 'newName', email: 'newEmail'};
+}
+async function _fetchLoad() {
+  await sleep(2000);
+  return [
+    {id: 1, name: 'name', email: 'email'},
+    {id: 2, name: 'name2', email: 'email2'}
+  ];
 }
 
+
+
+
+// 自定义hook
+// 用来获取数据
 function useCustomers() {
-  return {
-    customers: [
-      {
-        id: 1,
-        name: 'name',
-        email: 'email',
-      },{
-        id: 2,
-        name: 'name2',
-        email: 'email2',
-      }
-    ],
-    dispatch: function(model) {
-      let {type, payload} = model;
-      console.log(type, payload);
-      if (type === 'UPDATE_CUSTOMER') {
-        return [
-          payload,{
-            id: 2,
-            name: 'name2',
-            email: 'email2',
-          }
-        ];
-      }
+  const [state, setState] = useState([]);
+
+  useEffect(() => {
+    _fetchLoad().then(setState);
+  }, []);
+
+  function dispatch(action) {
+    if (action.type === 'UPDATE_LIST') {
+      _fetchUpdate({
+        body: action.payload
+      }).then(result=>{
+        setState([
+          action.payload,
+          {id: 2, name: 'name2', email: 'email2'}
+        ]);
+      })
+    } else {
+      return state;
     }
   }
+  
+  return [state, dispatch];
 }
 
 
-function EditCustomer({ id }) {
-  let { customers, dispatch } = useCustomers();
-  // access context and probably trigger side effects
+
+
+
+// 逻辑
+function EditCustomerController({ id, children }) {
+  let [customers, dispatch] = useCustomers();
 
   let customer = customers.find(c => c.id === id);
-
-
-  let [errors, setErrors] = React.useState()
-  let [saving, setSaving] = React.useState(false)
-  let [name, setName] = React.useState(customer.name);
-  let [email, setEmail] = React.useState(customer.email);
-
   if (!customer) {
-    return (
-      <div>not found</div>
-    );
+    return <NotFound />;
   }
 
-
-  let saveCustomer = () => {
-    setSaving(true)
-    _fetchUpdate({
-      url: `/api/customers/${id}`,
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email })
-    })
-      .then(response => response.json())
-      .then(apiCustomer => {
-        // Formatting for differences between backend and frontend
-        //   e.g. Rails/Django snake_case into JavaScript camelCase
-        dispatch({
-          type: "UPDATE_CUSTOMER",
-          payload: formatChangeForFrontend(apiCustomer)
-        });
-      })
-      .catch(error => {
-        setErrors(error)
-      })
-      .finally(() => {
-        setSaving(false)
-      })
+  let onSave = (newCustomerData) => {
+    dispatch({
+      type: "UPDATE_LIST",
+      payload: newCustomerData,
+    });
   };
+
+  return React.cloneElement(children, {
+    initId: customer.id,
+    initName: customer.name,
+    initEmail: customer.email,
+    onSave
+  });
+}
+
+
+
+
+
+// 纯UI组件，只负责渲染dom
+function CustomerForm({onSave, initId, initName, initEmail}) {
+  let [errors, setErrors] = React.useState();
+  let [saving, setSaving] = React.useState(false);
+  let [id, setId] = React.useState(initId);
+  let [name, setName] = React.useState(initName);
+  let [email, setEmail] = React.useState(initEmail);
+
+  let onSaveWrapped = () => {
+    setSaving(true)
+    onSave({id, name, email})
+      // .catch((error) => {
+      //   setErrors(error)
+      // })
+      // .finally(() => {
+      //   setSaving(false)
+      // })
+    setSaving(false)
+  }
 
   return (
     <div>
@@ -127,7 +135,9 @@ function EditCustomer({ id }) {
         value={email}
         onChange={e => setEmail(e.target.value)}
       />
-      <button onClick={saveCustomer} disabled={saving}>Save</button>
+      <button onClick={onSaveWrapped} disabled={saving}>Save</button>
     </div>
-  )
+  );
 }
+
+
